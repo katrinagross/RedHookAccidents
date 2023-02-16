@@ -1,0 +1,218 @@
+---
+title: "Accidents - Vis used"
+author: "Katrina Gross"
+date: "5/8/2022"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+
+library(sf)
+library(tmap)
+```
+
+
+```{r}
+
+accidents <- read_csv("../data/Crash_Rate_by_ZipCode.csv")
+
+zip_code <- read_sf("../data/ZIP_CODE_040114/ZIP_CODE_040114.shp")
+
+accidents <- accidents %>%
+  select(-"...1") %>%
+  mutate(`ZIP CODE` = as.character(`ZIP CODE`)) %>%
+  rename("Collision Rate" = collision_rate,
+         "Injury Rate" = injury_rate,
+         "Collision Count" = COLLISION_ID,
+         "Injury Count" = Pedestrian_hurt)
+
+comp_zips <- c('11231',
+ '11201',
+ '11217',
+ '11215',
+ '11232',
+ '10451',
+ '10454',
+ '10455',
+ '11222',
+ '11379',
+ '11103',
+ '11103',
+ '11106')
+```
+
+## All accidents
+
+```{r}
+
+all_collisions <- accidents %>%
+  group_by(year, `ZIP CODE`, BOROUGH) %>%
+  summarize(`Collisions` = sum(`Collision Count`),
+            `Injuries` = sum(`Injury Count`)) %>%
+  ungroup()
+
+
+demo <- accidents %>%
+  select(year, `ZIP CODE`, BOROUGH, `Total Pop`, `Housing Units`) %>%
+  distinct()
+
+all_collisions <- all_collisions %>%
+  left_join(demo) %>%
+  mutate(`Collision Rate` = Collisions/`Housing Units` * 1000,
+         `Injury Rate` = Injuries/`Housing Units` * 1000) %>%
+  filter(`Total Pop` > 10000) # can't be right if under
+
+all_collisions <- all_collisions %>%
+  group_by(BOROUGH) %>%
+  mutate(collision_zscore = `Collision Rate` - mean(`Collision Rate`, na.rm = TRUE)/sd(`Collision Rate`, na.rm = TRUE),
+         injury_zscore = `Injury Rate` - mean(`Injury Rate`, na.rm = TRUE)/sd(`Injury Rate`, na.rm = TRUE)) %>%
+  ungroup()
+
+acc_shp_all <- left_join(zip_code, all_collisions, 
+                      by = c("ZIPCODE" = "ZIP CODE"))
+
+m1 <- tm_shape(acc_shp_all) +
+  tm_polygons(col = "Collisions", palette = "seq", midpoint = NA) +
+  tm_layout(aes.palette = list(seq = "-RdYlBu"), 
+            panel.label.size=1.5,
+            legend.title.size = 1.3,
+            legend.text.size = 1.3) + # reverse colors
+  tm_facets("year")
+
+m1
+
+```
+
+# PCT change map
+
+```{r}
+
+accidents_chng_cnt <- all_collisions %>%
+  arrange(`Collisions`) %>%
+  group_by(`ZIP CODE`, year) %>%
+  filter(`Collisions` == max(`Collisions`)) %>%
+  ungroup() %>%
+  select(c(`ZIP CODE`, year, `Collisions`)) %>%
+  pivot_wider(names_from = year, values_from = `Collisions`) %>%
+  mutate(`2013-2014` = (`2014`-`2013`)/`2013`,
+         `2014-2015` = (`2015`-`2014`)/`2014`,
+         `2015-2016` = (`2016`-`2015`)/`2015`,
+         `2016-2017` = (`2017`-`2016`)/`2016`,
+         `2017-2018` = (`2018`-`2017`)/`2017`,
+         `2018-2019` = (`2019`-`2018`)/`2018`,
+         `2019-2020` = (`2020`-`2019`)/`2019`,) %>%
+  select(c(`ZIP CODE`, `2013-2014`, `2014-2015`, `2015-2016`, `2016-2017`, `2017-2018`, `2018-2019`, `2019-2020`)) %>%
+  pivot_longer(cols = `2013-2014`:`2019-2020`, names_to = "yr_group") %>%
+  rename(`Accident Pct Change` = value)
+
+acc_shp3 <- left_join(zip_code, accidents_chng_cnt, by = c("ZIPCODE" = "ZIP CODE"))
+
+m2_cnt <- tm_shape(acc_shp3) +
+  tm_polygons(col = "Accident Pct Change", palette = "seq", dir = -1, midpoint = 0) +
+    tm_layout(aes.palette = list(seq = "-RdYlBu"), 
+            panel.label.size=1.5,
+            legend.title.size = 1.3,
+            legend.text.size = 1.3) + # reverse colors
+  tm_facets("yr_group")
+
+m2_cnt
+
+```
+
+# PCT change map (relative to 2013)
+
+```{r}
+
+accidents_chng_cnt_13 <- all_collisions %>%
+  arrange(`Collisions`) %>%
+  group_by(`ZIP CODE`, year) %>%
+  filter(`Collisions` == max(`Collisions`)) %>%
+  ungroup() %>%
+  select(c(`ZIP CODE`, year, `Collisions`)) %>%
+  pivot_wider(names_from = year, values_from = `Collisions`) %>%
+  mutate(`2014` = (`2014`-`2013`)/`2013`,
+         `2015` = (`2015`-`2013`)/`2013`,
+         `2016` = (`2016`-`2013`)/`2013`,
+         `2017` = (`2017`-`2013`)/`2013`,
+         `2018` = (`2018`-`2013`)/`2013`,
+         `2019` = (`2019`-`2013`)/`2013`,
+         `2020` = (`2020`-`2013`)/`2013`,) %>%
+  select(c(`ZIP CODE`, `2014`, `2015`, `2016`, `2017`, `2018`, `2019`, `2020`)) %>%
+  pivot_longer(cols = `2014`:`2020`, names_to = "yr_group") %>%
+  rename(`Accident Pct Change` = value)
+
+acc_shp3 <- left_join(zip_code, accidents_chng_cnt_13, by = c("ZIPCODE" = "ZIP CODE"))
+
+m3_cnt <- tm_shape(acc_shp3) +
+  tm_polygons(col = "Accident Pct Change", palette = "seq", dir = -1, midpoint = 0) +
+    tm_layout(aes.palette = list(seq = "-RdYlBu"), 
+            panel.label.size=1.5,
+            legend.title.size = 1.3,
+            legend.text.size = 1.3) + # reverse colors
+  tm_facets("yr_group")
+
+m3_cnt
+
+```
+
+## All Accidents Gradient Chart
+
+```{r}
+
+rh_theme <- function(){
+  font <- "Georgia"
+  theme_minimal() +
+  theme(title = element_text(family = font, size = 16),
+        axis.title = element_text(family = font, size = 16),
+        axis.text.x = element_text(family = font, size = 14),
+        axis.text.y = element_text(family = font, size = 14),
+        legend.title = element_text(family = font, size = 16),
+        legend.text = element_text(family = font, size = 12),
+        strip.text.x = element_text(size = 12, family = font),
+        strip.text.y = element_text(size = 12, family = font)
+        )
+}
+
+all_collisions_sub <- all_collisions %>%
+  filter(`ZIP CODE` %in% comp_zips) %>%
+  mutate(`Red Hook` = ifelse(`ZIP CODE` == 11231, "RED HOOK", BOROUGH),
+         year = as.integer(year))
+
+all_col_sub_g1 <- all_collisions_sub %>% filter(year > 2012) %>%
+  ggplot(aes(x= year, y= `Collisions`, group= `ZIP CODE`, color = `Red Hook`)) +
+  geom_line(size = 0.8) +
+  scale_color_manual(values = c("#6A92BB", "#6A92BB", "#6A92BB", "#F35534"), name = "") +
+  facet_grid(rows = vars(BOROUGH)) +
+  scale_x_continuous(breaks = seq(2013, 2021)) +
+  labs(title= "Vehicle Collisions (all vehicles)", 
+       x= "", 
+       y= "") +
+  rh_theme()  +
+  theme(legend.position = "none")
+
+all_col_sub_g1
+
+
+all_col_sub_g2 <- all_collisions_sub %>% filter(year %in% c(2013, 2019)) %>%
+  ggplot(aes(x= year, y= `Collisions`, group= `ZIP CODE`, color = `Red Hook`)) +
+  geom_line(size = 0.8) +
+  scale_color_manual(values = c("#6A92BB", "#6A92BB", "#6A92BB", "#F35534"), name = "")+
+  facet_grid(cols = vars(BOROUGH)) +
+  scale_x_continuous(breaks = c(2013, 2019), labels = c("'13", "'19")) +
+  labs(title= "Vehicle Collisions Change (all vehicles)", 
+       x= "", 
+       y= "") +
+  rh_theme()
+
+all_col_sub_g2
+
+```
