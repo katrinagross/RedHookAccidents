@@ -5,5 +5,7 @@ This analysis looks at a local level within Red Hook to see where accidents are 
 
 It also tracks broader city-wide trends of accidents as well as in areas comparable to Red Hook.
 
-The Data folder holds the necessary data, you will also need to access either the API or the provided Google Drive link (in the analysis jupyter notebook) for the full extent of the accident data.
+The Data folder holds the necessary data, you will also need to access either the API or the provided Google Drive link (in the Accident_Data_Analysis.ipynb jupyter notebook) for the full extent of the accident data.
+
+PNG visuals are in the Visuals folder that were developed in the R markdown. 
 
